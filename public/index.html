@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Student Registration</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>Student Registration</h1>
+    <form id="regForm">
+      <label for="name">Full name</label>
+      <input id="name" name="name" required />
+
+      <label for="studentId">Student ID</label>
+      <input id="studentId" name="studentId" required />
+
+      <label for="rollNumber">Roll number</label>
+      <input id="rollNumber" name="rollNumber" required />
+
+      <label for="course">Course</label>
+      <select id="course" name="courseId" required>
+        <option value="">Loading courses...</option>
+      </select>
+
+      <button type="submit">Register</button>
+    </form>
+
+    <div id="message" class="hidden"></div>
+  </div>
+
+  <script src="/js/main.js"></script>
+</body>
+</html>
