@@ -2,34 +2,120 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Student Registrationn</title>
+  <title>Student Registration</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="/css/styles.css" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    .form-row { margin-bottom: 12px; }
+    label { display:block; font-weight:600; margin-bottom:6px; }
+    input[type="text"], input[type="email"], button { padding:8px; font-size:14px; width:100%; max-width:420px; }
+    .hint { color:#666; font-size:13px; margin-top:6px; }
+    .success { color:green; margin-top:12px; }
+    .error { color:crimson; margin-top:12px; }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Student Registration</h1>
-    <form id="regForm">
-      <label for="name">Full name</label>
-      <input id="name" name="name" required />
+<h1>Register</h1>
 
-      <label for="studentId">Student ID</label>
-      <input id="studentId" name="studentId" required />
-
-      <label for="rollNumber">Roll number</label>
-      <input id="rollNumber" name="rollNumber" required />
-
-      <label for="course">Course</label>
-      <select id="course" name="courseId" required>
-        <option value="">Loading courses...</option>
-      </select>
-
-      <button type="submit">Register</button>
-    </form>
-
-    <div id="message" class="hidden"></div>
+<form id="regForm" method="POST" action="/register">
+  <div class="form-row">
+    <label for="name">Full name</label>
+    <input id="name" name="name" type="text" required />
   </div>
 
-  <script src="/js/main.js"></script>
+  <div class="form-row">
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" required />
+  </div>
+
+  <div class="form-row">
+    <label for="preferredCourse">Preferred course (type your preferred course)</label>
+    <input id="preferredCourse" name="preferredCourse" type="text" placeholder="e.g. Computer Science, Data Science, UX Design" required />
+    <div class="hint">Type your preferred course name. This will be used by the dashboard to personalize your view.</div>
+  </div>
+
+  <!-- Keep 'course' too (for backwards compatibility with any server-side code expecting course) -->
+  <input type="hidden" name="course" id="courseHidden" />
+
+  <div class="form-row">
+    <button id="submitBtn" type="submit">Register</button>
+  </div>
+
+  <div id="msg" role="status"></div>
+</form>
+
+<script>
+  (function(){
+    const form = document.getElementById('regForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const msg = document.getElementById('msg');
+    const preferredInput = document.getElementById('preferredCourse');
+    const hiddenCourse = document.getElementById('courseHidden');
+
+    // Mirror preferredCourse into hidden `course` to stay compatible with server code expecting 'course'
+    preferredInput.addEventListener('input', () => {
+      hiddenCourse.value = preferredInput.value;
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      submitBtn.disabled = true;
+      msg.textContent = '';
+      msg.className = '';
+
+      const payload = {
+        name: form.name.value.trim(),
+        email: form.email.value.trim(),
+        preferredCourse: form.preferredCourse.value.trim(),
+        // include legacy field too
+        course: form.course.value.trim()
+      };
+
+      // Basic validation
+      if (!payload.name || !payload.email || !payload.preferredCourse) {
+        msg.textContent = 'Please complete all fields.';
+        msg.className = 'error';
+        submitBtn.disabled = false;
+        return;
+      }
+
+      try {
+        // Try JSON API first - many apps accept JSON POST to /register or /api/register
+        const res = await fetch('/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          const data = await res.json().catch(()=>({}));
+          const studentId = data && data.id ? data.id : null;
+          msg.textContent = 'Registered successfully! Redirecting to dashboard...';
+          msg.className = 'success';
+          // small delay to show message
+          setTimeout(() => {
+            if (studentId) {
+              window.location.href = '/dashboard.html?id=' + encodeURIComponent(studentId);
+            } else {
+              // if server didn't give an id, send email in query so dashboard can fetch user by email
+              window.location.href = '/dashboard.html?email=' + encodeURIComponent(payload.email);
+            }
+          }, 900);
+          return;
+        }
+
+        // If JSON POST failed with 4xx/5xx, fallback to form submit below
+        console.warn('JSON register failed, falling back to form POST', res.status);
+      } catch (err) {
+        console.warn('JSON register failed, will fallback to form POST', err);
+      }
+
+      // Fallback: submit regular form POST (multipart/form or urlencoded)
+      // This preserves backwards compatibility with servers that do not accept JSON
+      form.removeEventListener('submit', arguments.callee);
+      form.submit();
+    });
+  })();
+</script>
 </body>
 </html>

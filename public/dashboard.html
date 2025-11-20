@@ -4,28 +4,132 @@
   <meta charset="utf-8" />
   <title>Dashboard</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="/css/styles.css" />
+  <style>
+    body { font-family: Arial, sans-serif; margin:24px; }
+    h1 { margin-bottom:6px; }
+    .meta { color:#666; margin-bottom:18px; }
+    .card { border:1px solid #ddd; padding:16px; border-radius:6px; max-width:760px; }
+    .label { font-weight:600; margin-top:8px; }
+    #preferred { font-size:1.15em; color:#1a73e8; margin-top:6px; }
+    #suggestion { margin-top:12px; color:#333; }
+    .small { font-size:13px; color:#666; margin-top:8px; }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <div id="welcome">
-      <!-- Filled by script -->
-    </div>
+<h1>Your Dashboard</h1>
+<div class="meta">Personalized view based on your preferred course</div>
 
-    <section id="student-details" class="card">
-      <!-- Student details -->
-    </section>
+<div id="main" class="card">
+  <div id="loading">Loading profile...</div>
 
-    <section id="course-stats" class="card">
-      <h3>Course statistics</h3>
-      <div id="stats-list">
-        <!-- Filled by script -->
-      </div>
-    </section>
+  <div id="profile" style="display:none;">
+    <div class="label">Name</div>
+    <div id="name"></div>
 
-    <p><a href="/">Register another student</a></p>
+    <div class="label">Email</div>
+    <div id="email"></div>
+
+    <div class="label">Preferred course</div>
+    <div id="preferred"></div>
+
+    <div id="suggestion" class="small"></div>
   </div>
+</div>
 
-  <script src="/js/dashboard.js"></script>
+<script>
+  (function(){
+    const qs = new URLSearchParams(window.location.search);
+    const id = qs.get('id');
+    const email = qs.get('email');
+
+    async function fetchProfile() {
+      // Try server endpoints in this order: /api/student/:id, /student/:id, /api/profile?email=..., /profile?email=...
+      const attempts = [];
+
+      if (id) {
+        attempts.push({ url: '/api/student/' + encodeURIComponent(id), json: true });
+        attempts.push({ url: '/student/' + encodeURIComponent(id), json: false }); // maybe HTML
+      }
+      if (email) {
+        attempts.push({ url: '/api/profile?email=' + encodeURIComponent(email), json: true });
+        attempts.push({ url: '/profile?email=' + encodeURIComponent(email), json: false });
+      }
+
+      // last resort: try a generic /me endpoint
+      attempts.push({ url: '/api/me', json: true });
+      attempts.push({ url: '/me', json: false });
+
+      for (const attempt of attempts) {
+        try {
+          const res = await fetch(attempt.url, { headers: { 'Accept': 'application/json' } });
+          if (!res.ok) continue;
+          // try parse JSON
+          const body = await res.json().catch(null);
+          if (body && (body.name || body.email || body.preferredCourse || body.course)) {
+            return normalize(body);
+          }
+        } catch (err) {
+          // ignore and continue trying other endpoints
+        }
+      }
+
+      return null;
+    }
+
+    function normalize(body) {
+      // Accept many possible shapes so this works with your existing backend:
+      // - body.preferredCourse
+      // - body.course
+      // - body.data.course
+      const profile = {};
+      profile.name = body.name || body.fullname || (body.data && body.data.name) || 'Unknown';
+      profile.email = body.email || (body.data && body.data.email) || '';
+      profile.preferredCourse = body.preferredCourse || body.course || (body.data && body.data.course) || '';
+      return profile;
+    }
+
+    function personalizeUI(profile) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('profile').style.display = 'block';
+      document.getElementById('name').textContent = profile.name;
+      document.getElementById('email').textContent = profile.email || '(no email available)';
+      document.getElementById('preferred').textContent = profile.preferredCourse || '(no preferred course set)';
+
+      const suggested = document.getElementById('suggestion');
+
+      if (!profile.preferredCourse) {
+        suggested.innerHTML = 'You have not set a preferred course. Go back to <a href="/index.html">Register</a> and type the course you want.';
+        return;
+      }
+
+      // Example personalization: show different messages depending on keywords in preferred course
+      const c = profile.preferredCourse.toLowerCase();
+      if (c.includes('data')) {
+        suggested.innerHTML = 'Because you prefer a Data-related course, we show data internships and analytics tips here.';
+      } else if (c.includes('computer') || c.includes('cs') || c.includes('software')) {
+        suggested.innerHTML = 'Because of your Computer Science preference, you get CS resources and coding challenges.';
+      } else if (c.includes('design') || c.includes('ux')) {
+        suggested.innerHTML = 'Design resources and portfolio tips are prioritized for you.';
+      } else {
+        suggested.innerHTML = 'We will prioritize content related to <strong>' + escapeHtml(profile.preferredCourse) + '</strong>.';
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (m) {
+        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m];
+      });
+    }
+
+    (async function init() {
+      const profile = await fetchProfile();
+      if (profile) {
+        personalizeUI(profile);
+      } else {
+        document.getElementById('loading').textContent = 'Could not find profile. You can return to the registration page to set your preferred course.';
+      }
+    })();
+  })();
+</script>
 </body>
 </html>
